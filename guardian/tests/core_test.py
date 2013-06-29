@@ -159,3 +159,38 @@ class ObjectPermissionCheckerTest(ObjectPermissionTestCase):
                 GroupObjectPermission.objects.assign_perm(perm, self.group, obj)
             self.assertEqual(sorted(perms), sorted(check.get_perms(obj)))
 
+    def test_has_perms_using_parent_object(self):
+        group = Group.objects.create(name='group')
+        obj1 = ContentType.objects.create(
+            name='ct1', model='foo', app_label='guardian-tests')
+        obj2 = ContentType.objects.create(
+            name='ct2', model='bar', app_label='guardian-tests')
+        obj2.get_parent_object_permission = lambda: (obj1,)
+
+        assign_perms = {
+            group: ('change_group', 'delete_group'),
+            obj1: ('change_contenttype', 'delete_contenttype'),
+            obj2: ('delete_contenttype',),
+        }
+
+        # for user
+        check = ObjectPermissionChecker(self.user)
+        self.assign_perms(UserObjectPermission, assign_perms[obj1], self.user, obj1)
+        self.assign_perms(UserObjectPermission, assign_perms[obj2], self.user, obj2)
+        print "\n\n\n", '*'*30
+        for perm in sorted(chain(assign_perms[obj1], assign_perms[obj2])):
+            print 'checking perm %s in %s' % (perm, obj2)
+            self.assertTrue(check.has_perm(perm, obj2))
+
+        # for group
+        check = ObjectPermissionChecker(self.group)
+        self.assign_perms(GroupObjectPermission, assign_perms[obj1], self.group, obj1)
+        self.assign_perms(GroupObjectPermission, assign_perms[obj2], self.group, obj2)
+        print "\n\n\n", '-'*30
+        for perm in sorted(chain(assign_perms[obj1], assign_perms[obj2])):
+            print 'checking perm %s in %s' % (perm, obj2)
+            self.assertTrue(check.has_perm(perm, obj2))
+
+    def assign_perms(self, clazz, perms, user_or_group, obj):
+        for perm in perms:
+            clazz.objects.assign_perm(perm, user_or_group, obj)
